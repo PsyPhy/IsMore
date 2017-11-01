@@ -13,7 +13,10 @@ int main(int argc, char *argv[])
 	int return_code;
 
 	MDF::MDFRecord *mdf = new MDF::MDFRecord();
-	return_code = mdf->ReadDataFile( "ismorefile" );
+	return_code = mdf->ReadDataFile( "IsMoreFile" );
+	mdf->WriteMarkersASCII( "lowrate.txt" );
+	mdf->FillGaps();
+	mdf->WriteMarkersASCII( "hirate.txt" );
 
 	return return_code; 
 }

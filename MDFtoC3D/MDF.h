@@ -23,9 +23,9 @@ namespace MDF {
 		MDFHeaderEntry (void ) {
 			this->next = nullptr;
 		}
-
+		
 	};
-
+	
 	class MDFRecord : public PsyPhy::VectorsMixin {
 
 	public:
@@ -38,11 +38,13 @@ namespace MDF {
 		char *comment;
 		unsigned short *date;
 
-		float	**marker;
+		float	**iMarker;
+		PsyPhy::Vector3	**marker;
 		bool	**markerVisibility;
 		unsigned int	nMarkers;
 		unsigned int	nMarkerSamples;
-		unsigned short	*markerRate;
+		unsigned short	markerRate;
+		double			markerInterval;
 		unsigned short	*markerResolution;
 		unsigned short	*markerHardwareCount;
 		char			**markerName;
@@ -51,7 +53,8 @@ namespace MDF {
 		float	**force;
 		unsigned int	nForceChannels;
 		unsigned int	nForceSamples;
-		unsigned short	*forceRate;
+		unsigned short	forceRate;
+		double			forceInterval;
 		float			*forceResolution;
 		char			**forceChannelName;
 
@@ -59,12 +62,14 @@ namespace MDF {
 		float	**analog;
 		unsigned int	nAnalogChannels;
 		unsigned int	nAnalogSamples;
-		unsigned short	*analogRate;
+		unsigned short	analogRate;
+		double			analogInterval;
 		float			*analogResolution;
 		char			**analogChannelName;
 
 		unsigned short	**event;
-		unsigned short	*eventRate;
+		unsigned short	eventRate;
+		double			eventInterval;
 
 	private:
 
@@ -72,7 +77,9 @@ namespace MDF {
 		MDFHeaderEntry *headerEntryList;
 
 	public:
-		int ReadDataFile( const char *filename, bool verbose = false );
+		int		ReadDataFile( const char *filename, bool verbose = false );
+		void	WriteMarkersASCII( const char *filename );
+		void	FillGaps( void );
 
 		// Constructor
 		MDFRecord ( void ) : 

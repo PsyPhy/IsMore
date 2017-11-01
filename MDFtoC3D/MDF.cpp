@@ -5,6 +5,81 @@
 using namespace PsyPhy;
 using namespace MDF;
 
+void MDFRecord::WriteMarkersASCII( const char *filename ) {
+
+	FILE *fp = fopen( filename, "w" );
+	if ( !fp ) {
+		fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", filename );
+		return;
+	}
+
+	for ( unsigned int sample = 0; sample < nMarkerSamples; sample++ ) {
+		fprintf( fp, "%d\t%8.3f", sample, (double) sample * markerInterval );
+		for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
+			if ( markerVisibility[mrk][sample] ) fprintf( fp, "\t1\t%8.4f\t%8.4f\t%8.4f", marker[mrk][sample][X], marker[mrk][sample][Y], marker[mrk][sample][Z] );
+			else fprintf( fp, "\t0\t%8.4f\t%8.4f\t%8.4f", 0.0, 0.0, 0.0 );
+		}
+		fprintf( fp, "\n" );
+	}
+}
+
+void MDFRecord::FillGaps( void ) {
+
+	int mrk, sample;
+	Vector3 *highrate;
+	bool	*visible;
+
+	// Fill blanks at begining or end with first (last) valide data.
+	for ( mrk = 0; mrk < nMarkers; mrk++ ) {
+		for ( sample = 0; sample < nMarkerSamples; sample++ ) {
+			if ( markerVisibility[mrk][sample] ) break;
+		}
+		if ( sample < nMarkerSamples ) {
+			for ( unsigned int i = 0; i < sample; i++ ) {
+				CopyVector( marker[mrk][i], marker[mrk][sample] );
+				markerVisibility[mrk][i] = true;
+			}
+		}
+		for ( sample = nMarkerSamples - 1; sample >= 0; sample-- ) {
+			if ( markerVisibility[mrk][sample] ) break;
+		}
+		if ( sample >= 0 ) {
+			for ( unsigned int i = sample + 1; i < nMarkerSamples; i++ ) {
+				CopyVector( marker[mrk][i], marker[mrk][sample] );
+				markerVisibility[mrk][i] = true;
+			}
+		}
+
+		// Now fill spaces between analog samples by linear interpolation.
+		highrate = ( Vector3 * )malloc( nAnalogSamples * sizeof( *highrate ) );
+		visible = (bool *) malloc( nAnalogSamples * sizeof( *visible ) );
+		fAbortMessageOnCondition( !highrate, "MDF", "Error allocating memory for hirate marker array %d.", mrk );
+
+		unsigned int before = 0;
+		unsigned int after = 0;
+		for ( sample = 0; sample < nAnalogSamples; sample++ ) {
+			for ( int i = before; i * markerInterval <= sample * analogInterval; i++ ) {
+				if ( markerVisibility[mrk][i] ) before = i;
+			}
+			for ( after = before; after < nMarkerSamples; after++ ) {
+				if ( markerVisibility[mrk][after] ) break;
+			}
+			double relative = (double)( sample * analogInterval - before * markerInterval ) / (double) ( ( after - before ) * markerInterval );
+			Vector3 delta;
+			SubtractVectors( delta, marker[mrk][after], marker[mrk][before] );
+			ScaleVector( delta, delta, relative );
+			AddVectors( highrate[sample], marker[mrk][before], delta );
+		}
+		free( marker[mrk] );
+		marker[mrk] = highrate;
+		free( markerVisibility[mrk] );
+		markerVisibility[mrk] = visible;
+	}
+	markerRate = analogRate;
+	nMarkerSamples = nAnalogSamples;
+}
+
+
 char *MDF::HeaderTypeName[] = 
 { "TextComments", "Date", "MarkerPosition", "Analog'", "InView", "EventData", "SamplingRateMarkers", 
 "SamplingRateADC", "SamplingRateEvent", "TimeScale", "GraphCursor", "MarkerResolution", "HardwareMarkers",
@@ -55,7 +130,9 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 	MDFHeaderEntry *entry = headerEntryList;
 	unsigned short elements;
 	unsigned int items_read;
-	unsigned short *packedVisibility;
+	unsigned char *packedVisibility;
+	int bytes, bits;
+	unsigned short word, bit;
 
 	do {
 
@@ -77,8 +154,8 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 			break;
 
 		case 2:	// Marker Data
-			marker = (float **) malloc( entry->nArrays * sizeof( *marker ) );
-			fAbortMessageOnCondition( !marker, "MDF", "Error allocating memory for marker array pointers." );
+			iMarker = (float **) malloc( entry->nArrays * sizeof( *iMarker ) );
+			fAbortMessageOnCondition( !iMarker, "MDF", "Error allocating memory for marker array pointers." );
 			break;
 
 		case 3:	// Analog Force Data
@@ -106,7 +183,7 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 			fAbortMessageOnCondition( !markerResolution, "MDF", "Error allocating memory for force resolution array." );
 			break;
 
-		case 14:	// Marker Resolution
+		case 14:	// Marker Hardware Count
 			markerHardwareCount = (unsigned short *) malloc( entry->nArrays * sizeof( *markerHardwareCount ) );
 			fAbortMessageOnCondition( !markerHardwareCount, "MDF", "Error allocating memory for force resolution array." );
 			break;
@@ -123,17 +200,17 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 
 		case 22:	// Marker Names
 			markerName = (char **) malloc( entry->nArrays * sizeof( *markerName ) );
-			fAbortMessageOnCondition( !marker, "MDF", "Error allocating memory for marker name pointers." );
+			fAbortMessageOnCondition( !markerName, "MDF", "Error allocating memory for marker name pointers." );
 			break;
 
 		case 23:	// Force Channel Names
 			forceChannelName = (char **) malloc( entry->nArrays * sizeof( *forceChannelName ) );
-			fAbortMessageOnCondition( !marker, "MDF", "Error allocating memory for force channel name pointers." );
+			fAbortMessageOnCondition( !forceChannelName, "MDF", "Error allocating memory for force channel name pointers." );
 			break;
 
 		case 24:	// Analog Channel Names
 			analogChannelName = (char **) malloc( entry->nArrays * sizeof( *analogChannelName ) );
-			fAbortMessageOnCondition( !marker, "MDF", "Error allocating memory for analog channel name pointers." );
+			fAbortMessageOnCondition( !analogChannelName, "MDF", "Error allocating memory for analog channel name pointers." );
 			break;
 
 		default:
@@ -153,6 +230,7 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 				comment = (char *) malloc( (elements + 1) * entry->size );
 				fAbortMessageOnCondition( !comment, "MDF", "Error allocating memory for comments." );
 				items_read = fread( comment, entry->size, elements, fp );
+				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading comment %d.", j );
 				// Make sure that the comments are null terminated.
 				comment[elements] = '\0';
 				break;
@@ -160,13 +238,14 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 			case 1:	// Date
 				date = (unsigned short *) malloc( elements * entry->size );
 				fAbortMessageOnCondition( !date, "MDF", "Error allocating memory for date." );
-				items_read = fread( date, sizeof( *date ), 3, fp );
+				items_read = fread( date, entry->size, elements, fp );
+				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading date %d.", j );
 				break;
 
 			case 2:	// Marker Data
-				marker[j] = (float *) malloc( elements * entry->size );
-				fAbortMessageOnCondition( !marker[j], "MDF", "Error allocating memory for marker array %d.", j );
-				items_read = fread( marker[j], entry->size, elements, fp );
+				iMarker[j] = (float *) malloc( elements * entry->size );
+				fAbortMessageOnCondition( !iMarker[j], "MDF", "Error allocating memory for marker array %d.", j );
+				items_read = fread( iMarker[j], entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading marker data for marker %d.", j );
 				nMarkers = entry->nArrays;
 				nMarkerSamples = elements;
@@ -191,20 +270,21 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 				break;
 
 			case 5:	// Marker in view flags
-				packedVisibility = (unsigned short *) malloc( elements * entry->size );
-				markerVisibility[j] = (bool *) malloc( elements * entry->size * sizeof( *packedVisibility ) );
+				packedVisibility = (unsigned char *) malloc( elements * entry->size );
+				markerVisibility[j] = (bool *) malloc( elements * entry->size * 8 );
 				fAbortMessageOnCondition( !markerVisibility[j], "MDF", "Error allocating memory for visibility array %d.", j );
 				items_read = fread( packedVisibility, entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading visibility data for channel %d.", j );
-				for ( int pack = 0, index = 0; pack < elements; pack++ ) {
-					for ( int bit = 0; bit < sizeof( *packedVisibility ); bit++, index++ ) {
-						markerVisibility[j][index] = ( 0 != ( packedVisibility[pack] & ( 0x8000 >> bit ) ) );
+				for ( int pack = 0, index = 0; pack < ( elements * entry->size ); pack++ ) {
+					for ( bit = 0x80; bit; bit = bit >> 1, index++ ) {
+						word = packedVisibility[pack];
+						markerVisibility[j][index] = ( 0 != ( word & bit ) );
 					}
 				}
 				free( packedVisibility );
 				break;
 
-			case 6:	// Marker in view flags
+			case 6:	// Events
 				event[j] = (unsigned short *) malloc( elements * entry->size );
 				fAbortMessageOnCondition( !event[j], "MDF", "Error allocating memory for visibility array %d.", j );
 				items_read = fread( event[j], entry->size, elements, fp );
@@ -212,27 +292,27 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 				break;
 
 			case 7:
-				markerRate = (unsigned short *) malloc( elements * entry->size );
-				items_read = fread( markerRate, entry->size, elements, fp );
+				items_read = fread( &markerRate, entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading marker rate for event %d.", j );
+				markerInterval = 1.0 / (double) markerRate;
 				break;
 
 			case 8:
-				forceRate = (unsigned short *) malloc( elements * entry->size );
-				items_read = fread( forceRate, entry->size, elements, fp );
+				items_read = fread( &forceRate, entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading force rate for event %d.", j );
+				forceInterval = 1.0 / (double) forceRate;
 				break;
 
 			case 9:
-				analogRate = (unsigned short *) malloc( elements * entry->size );
-				items_read = fread( analogRate, entry->size, elements, fp );
+				items_read = fread( &analogRate, entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading analog rate for event %d.", j );
+				analogInterval = 1.0 / (double) analogRate;
 				break;
 
 			case 10:
-				eventRate = (unsigned short *) malloc( elements * entry->size );
-				items_read = fread( eventRate, entry->size, elements, fp );
+				items_read = fread( &eventRate, entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading analog rate for event %d.", j );
+				eventInterval = 1.0 / (double) eventRate;
 				break;
 
 			case 13:
@@ -292,22 +372,34 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 		entry = entry->next;
 	} while ( entry != nullptr );
 	
-	// Scale the analog data into floats.
+	// Scale the marker data and turn them into vectors.
+	marker = (Vector3 **) malloc( nMarkers * sizeof( *force ) );
+	fAbortMessageOnCondition( !force, "MDF", "Error allocating memory for marker pointers." );
+	for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
+		marker[mrk] = (Vector3 *) malloc( nMarkerSamples * sizeof( *marker[mrk] ));
+		fAbortMessageOnCondition( !marker[mrk], "MDF", "Error allocating memory for marker vector array %d.", mrk );
+		for ( unsigned int sample = 0; sample < nMarkerSamples; sample++ ) {
+			for ( int j = 0; j < 3; j++ ) {
+				marker[mrk][sample][j] = (double) iMarker[mrk][sample*3+j] * (double) markerResolution[mrk] / 1000000.0;
+			}
+		}
+	}
+	// Scale the force and analog data into floats.
 	force = (float **) malloc( nForceChannels * sizeof( *force ) );
 	fAbortMessageOnCondition( !force, "MDF", "Error allocating memory for analog array pointers." );
-	for ( int channel = 0; channel < nForceChannels; channel++ ) {
+	for ( unsigned int channel = 0; channel < nForceChannels; channel++ ) {
 		force[channel] = (float *) malloc( nForceSamples * sizeof( *force[channel] ));
 		fAbortMessageOnCondition( !force[channel], "MDF", "Error allocating memory for analog array %d.", channel );
-		for ( int sample = 0; sample < nForceSamples; sample++ ) {
+		for ( unsigned int sample = 0; sample < nForceSamples; sample++ ) {
 			force[channel][sample] = (float) iForce[channel][sample] * forceResolution[channel];
 		}
 	}
 	analog = (float **) malloc( nAnalogChannels * sizeof( *analog ) );
 	fAbortMessageOnCondition( !analog, "MDF", "Error allocating memory for analog array pointers." );
-	for ( int channel = 0; channel < nAnalogChannels; channel++ ) {
+	for ( unsigned int channel = 0; channel < nAnalogChannels; channel++ ) {
 		analog[channel] = (float *) malloc( nAnalogSamples * sizeof( *analog[channel] ));
 		fAbortMessageOnCondition( !analog[channel], "MDF", "Error allocating memory for analog array %d.", channel );
-		for ( int sample = 0; sample < nAnalogSamples; sample++ ) {
+		for ( unsigned int sample = 0; sample < nAnalogSamples; sample++ ) {
 			analog[channel][sample] = (float) iAnalog[channel][sample] * analogResolution[channel];
 		}
 	}
