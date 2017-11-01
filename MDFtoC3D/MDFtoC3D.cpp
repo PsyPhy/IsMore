@@ -14,9 +14,11 @@ int main(int argc, char *argv[])
 
 	MDF::MDFRecord *mdf = new MDF::MDFRecord();
 	return_code = mdf->ReadDataFile( "IsMoreFile" );
+	mdf->KeepOnly( 0, 27 );
 	mdf->WriteMarkersASCII( "lowrate.txt" );
 	mdf->FillGaps();
 	mdf->WriteMarkersASCII( "hirate.txt" );
+	mdf->WriteAnalogASCII( "analog.txt" );
 
 	return return_code; 
 }

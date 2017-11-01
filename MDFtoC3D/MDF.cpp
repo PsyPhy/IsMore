@@ -5,6 +5,53 @@
 using namespace PsyPhy;
 using namespace MDF;
 
+void MDFRecord::KeepOnly( int first_marker, int last_marker ) {
+
+	if ( last_marker < 0 ) last_marker = nMarkers - 1;
+	if ( last_marker >= nMarkers ) last_marker = nMarkers - 1;
+	if ( first_marker < 0 ) first_marker = 0;
+
+	int shifted, mrk;
+	if ( first_marker != 0 ) {
+		for ( mrk = first_marker, shifted = 0; mrk <= last_marker; mrk++, shifted++ ) {
+			free( marker[shifted] );
+			marker[shifted] = marker[mrk];
+			free( iMarker[shifted] );
+			iMarker[shifted] = iMarker[mrk];
+			free( markerVisibility[shifted] );
+			markerVisibility[shifted] = markerVisibility[mrk];
+			free( markerName[shifted] );
+			markerName[shifted] = markerName[mrk];
+		}
+	}
+	for ( shifted = last_marker - first_marker + 1; shifted < nMarkers; shifted++ ) {
+		free( marker[shifted] );
+		free( iMarker[shifted] );
+		free( markerVisibility[shifted] );
+	}
+	nMarkers = last_marker - first_marker + 1;
+}
+
+void MDFRecord::WriteAnalogASCII( const char *filename ) {
+
+	FILE *fp = fopen( filename, "w" );
+	if ( !fp ) {
+		fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", filename );
+		return;
+	}
+
+	fprintf( fp, "sample\ttime" );
+	for ( unsigned int channel = 0; channel < nAnalogChannels; channel++ ) fprintf( fp, "\t%s", analogChannelName[channel] );
+	fprintf( fp, "\n" );
+
+	for ( unsigned int sample = 0; sample < nAnalogSamples; sample++ ) {
+		fprintf( fp, "%d\t%8.3f", sample, (double) sample * analogInterval );
+		for ( unsigned int channel = 0; channel < nAnalogChannels; channel++ ) fprintf( fp, "\t%8.4f", analog[channel][sample] );
+		fprintf( fp, "\n" );
+	}
+	fclose( fp );
+}
+
 void MDFRecord::WriteMarkersASCII( const char *filename ) {
 
 	FILE *fp = fopen( filename, "w" );
@@ -12,6 +59,12 @@ void MDFRecord::WriteMarkersASCII( const char *filename ) {
 		fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", filename );
 		return;
 	}
+
+	fprintf( fp, "sample\ttime" );
+	for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
+		fprintf( fp, "\t%s.V\t%s.X\t%s.Y\t%s.Z", markerName[mrk], markerName[mrk], markerName[mrk], markerName[mrk] );
+	}
+	fprintf( fp, "\n" );
 
 	for ( unsigned int sample = 0; sample < nMarkerSamples; sample++ ) {
 		fprintf( fp, "%d\t%8.3f", sample, (double) sample * markerInterval );
@@ -21,6 +74,7 @@ void MDFRecord::WriteMarkersASCII( const char *filename ) {
 		}
 		fprintf( fp, "\n" );
 	}
+	fclose( fp );
 }
 
 void MDFRecord::FillGaps( void ) {
@@ -30,7 +84,18 @@ void MDFRecord::FillGaps( void ) {
 	bool	*visible;
 
 	// Fill blanks at begining or end with first (last) valide data.
+	fprintf( stderr, "Fill" );
+
 	for ( mrk = 0; mrk < nMarkers; mrk++ ) {
+
+		// Allocate buffers for marker data at higher rate.
+		highrate = ( Vector3 * )malloc( nAnalogSamples * sizeof( *highrate ) );
+		fAbortMessageOnCondition( !highrate, "MDF", "Error allocating memory for hirate marker array %d.", mrk );
+		visible = (bool *) malloc( nAnalogSamples * sizeof( *visible ) );
+		fAbortMessageOnCondition( !visible, "MDF", "Error allocating memory for hirate visibility array %d.", mrk );
+
+		if ( 0 == mrk % 28 ) fprintf( stderr, " | " );
+		fprintf( stderr, "." );
 		for ( sample = 0; sample < nMarkerSamples; sample++ ) {
 			if ( markerVisibility[mrk][sample] ) break;
 		}
@@ -39,43 +104,50 @@ void MDFRecord::FillGaps( void ) {
 				CopyVector( marker[mrk][i], marker[mrk][sample] );
 				markerVisibility[mrk][i] = true;
 			}
-		}
-		for ( sample = nMarkerSamples - 1; sample >= 0; sample-- ) {
-			if ( markerVisibility[mrk][sample] ) break;
-		}
-		if ( sample >= 0 ) {
-			for ( unsigned int i = sample + 1; i < nMarkerSamples; i++ ) {
-				CopyVector( marker[mrk][i], marker[mrk][sample] );
-				markerVisibility[mrk][i] = true;
+		
+			for ( sample = nMarkerSamples - 1; sample >= 0; sample-- ) {
+				if ( markerVisibility[mrk][sample] ) break;
 			}
-		}
+			if ( sample >= 0 ) {
+				for ( unsigned int i = sample + 1; i < nMarkerSamples; i++ ) {
+					CopyVector( marker[mrk][i], marker[mrk][sample] );
+					markerVisibility[mrk][i] = true;
+				}
+			}
 
-		// Now fill spaces between analog samples by linear interpolation.
-		highrate = ( Vector3 * )malloc( nAnalogSamples * sizeof( *highrate ) );
-		visible = (bool *) malloc( nAnalogSamples * sizeof( *visible ) );
-		fAbortMessageOnCondition( !highrate, "MDF", "Error allocating memory for hirate marker array %d.", mrk );
-
-		unsigned int before = 0;
-		unsigned int after = 0;
-		for ( sample = 0; sample < nAnalogSamples; sample++ ) {
-			for ( int i = before; i * markerInterval <= sample * analogInterval; i++ ) {
-				if ( markerVisibility[mrk][i] ) before = i;
+			// Now fill spaces between analog samples by linear interpolation.
+			unsigned int before = 0;
+			unsigned int after = 0;
+			for ( sample = 0; sample < nAnalogSamples; sample++ ) {
+				for ( int i = before; i * markerInterval <= sample * analogInterval; i++ ) {
+					if ( markerVisibility[mrk][i] ) before = i;
+				}
+				for ( after = before + 1; after < nMarkerSamples && after * markerInterval >= sample * analogInterval; after++ ) {
+					if ( markerVisibility[mrk][after] ) break;
+				}
+				double relative = (double)( sample * analogInterval - before * markerInterval ) / (double) ( ( after - before ) * markerInterval );
+				Vector3 delta;
+				SubtractVectors( delta, marker[mrk][after], marker[mrk][before] );
+				ScaleVector( delta, delta, relative );
+				AddVectors( highrate[sample], marker[mrk][before], delta );
+				visible[sample] = true;
 			}
-			for ( after = before; after < nMarkerSamples; after++ ) {
-				if ( markerVisibility[mrk][after] ) break;
+		}
+		else {
+			// If we are here, then the marker was never visible.
+			for ( sample = 0; sample < nAnalogSamples; sample++ ) {
+				CopyVector( highrate[sample], zeroVector );
+				visible[sample] = false;
 			}
-			double relative = (double)( sample * analogInterval - before * markerInterval ) / (double) ( ( after - before ) * markerInterval );
-			Vector3 delta;
-			SubtractVectors( delta, marker[mrk][after], marker[mrk][before] );
-			ScaleVector( delta, delta, relative );
-			AddVectors( highrate[sample], marker[mrk][before], delta );
 		}
 		free( marker[mrk] );
 		marker[mrk] = highrate;
 		free( markerVisibility[mrk] );
 		markerVisibility[mrk] = visible;
 	}
+	fprintf( stderr, "\n" );
 	markerRate = analogRate;
+	markerInterval = analogInterval;
 	nMarkerSamples = nAnalogSamples;
 }
 
@@ -355,7 +427,7 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 
 			case 24:	// Marker Names
 				analogChannelName[j] = (char *) malloc( elements * entry->size );
-				fAbortMessageOnCondition( !markerName[j], "MDF", "Error allocating memory for analog channel name %d.", j );
+				fAbortMessageOnCondition( !analogChannelName[j], "MDF", "Error allocating memory for analog channel name %d.", j );
 				items_read = fread( analogChannelName[j], entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading marker name for analog channel %d.", j );
 				break;
