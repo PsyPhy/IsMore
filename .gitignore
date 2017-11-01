@@ -301,3 +301,5 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+MDFtoC3D/lowrate.txt
+MDFtoC3D/hirate.txt
