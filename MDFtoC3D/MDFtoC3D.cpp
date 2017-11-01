@@ -2,7 +2,7 @@
 //
 
 #include "stdafx.h"
-#include "MDF.h"
+#include "../MDF/MDF.h"
 
 using namespace PsyPhy;
 using namespace MDF;

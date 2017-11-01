@@ -11,9 +11,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{B6B67F52-0AF3-4663-92C3-154B6B35625E}</ProjectGuid>
+    <ProjectGuid>{28F33ED5-23BD-4F3F-A36F-6455B143ED3F}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>MDFtoC3D</RootNamespace>
+    <RootNamespace>MDFtoEMT</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -72,13 +72,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="MDFtoC3D.cpp" />
+    <ClCompile Include="MDFtoEMT.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
@@ -94,6 +91,11 @@
     <ProjectReference Include="..\VectorsMixin\VectorsMixin.vcxproj">
       <Project>{6565a1ce-b49e-4e86-a49e-c5080df46b31}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="analog.emt" />
+    <None Include="markers.emt" />
+    <None Include="MDFtoEMT.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

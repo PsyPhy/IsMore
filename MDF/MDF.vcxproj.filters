@@ -4,10 +4,11 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="stdafx.cpp" />
-    <ClCompile Include="MDFtoC3D.cpp" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="MDF.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h" />
+    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="MDF.cpp" />
   </ItemGroup>
 </Project>
