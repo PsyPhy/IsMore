@@ -42,6 +42,8 @@ namespace MDF {
 		char identifier[8];
 		char version[16];
 
+		bool longLabels;
+
 		char *comment;
 		unsigned short *date;
 
@@ -92,6 +94,33 @@ namespace MDF {
 		void	KeepOnly( int first_marker, int last_marker = -1 );
 		void	FillGaps( void );
 
+		void	WriteC3D( const char *filename );
+		char	*Insert( char *ptr, unsigned char *block, int bytes );
+		char	*InsertParameter( char *ptr, int group, char *name, char *description, int value_size, unsigned char *value );
+		char	*InsertParameterShort( char *ptr, int group, char *name, char *description, int value ) {
+			unsigned short short_value = value;
+			return( InsertParameter( ptr, group, name, description, sizeof( short_value ), (unsigned char *) &short_value ) );
+		}
+		char	*InsertParameterByte( char *ptr, int group, char *name, char *description, int value ) {
+			unsigned char byte_value = value;
+			return( InsertParameter( ptr, group, name, description, sizeof( byte_value ), (unsigned char *) &byte_value ) );
+		}
+		char	*InsertParameterFloat( char *ptr, int group, char *name, char *description, float value ) {
+			float float_value = value;
+			return( InsertParameter( ptr, group, name, description, sizeof( float_value ), (unsigned char *) &float_value ) );
+		}
+		char *InsertParameterArray( char *ptr, int group, char *name, char *description, int value_size, int dimensions, unsigned char *array_limits, unsigned char *array );
+		char *InsertFloatArray( char *ptr, int group, char *name, char *description, int n_values, float *values ) {
+			unsigned char c_values = n_values;
+			return( InsertParameterArray( ptr, group, name, description, sizeof( float ), 1, &c_values, (unsigned char *) values ) );
+		}
+
+		char *InsertStringArray( char *ptr, int group, char *name, char *description, int string_length, int n_strings, char **strings );
+		char *InsertParameterString( char *ptr, int group, char *name, char *description, char *value ) {
+			int length = strlen( value );
+			return( InsertStringArray( ptr, group, name, description, length, 1, &value ) );
+		}
+
 		// Constructor
 		MDFRecord ( void ) : 
 			headerEntryList( nullptr ),
@@ -116,7 +145,10 @@ namespace MDF {
 			nAnalogChannels( 0 ),
 			nAnalogSamples( 0 ),
 			nMarkerSamples( 0 ),
-			nMarkers( 0 )
+			nMarkers( 0 ),
+
+			longLabels( true ) // Determines if C3D marker names are 4 chars or more.
+
 			{}
 
 		// Destructor

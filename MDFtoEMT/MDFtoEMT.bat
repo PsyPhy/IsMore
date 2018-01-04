@@ -1,9 +1,8 @@
-echo off
-@echo off
+echo on
 setlocal
 for %%a in (%*) do (
   echo Processing file: [%%a]
-  ..\Debug\MDFtoEMT.exe "%%a"
+  MDFtoEMT.exe "%%a"
 )
 
 pause

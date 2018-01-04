@@ -5,6 +5,257 @@
 using namespace PsyPhy;
 using namespace MDF;
 
+#define POINT_GROUP	-1
+#define ANALOG_GROUP -2
+#define PARAMETER_BUFFER_BLOCKS	255
+
+char *MDFRecord::Insert( char *ptr, unsigned char *block, int bytes ){
+	memcpy( ptr, block, bytes );
+	return( ptr + bytes );
+}
+
+char *MDFRecord::InsertParameter( char *ptr, int group, char *name, char *description, int value_size, unsigned char *value ){
+
+	*(ptr++) = strlen( name );
+	*(ptr++) = group;
+	ptr = Insert( ptr, (unsigned char *) name, strlen( name ) );
+	// Compute offset to next parameter block.
+	// offset (short) + type (char) + dimensions (char) + description length (char) = 5
+	// plus the size of the value and the size of the description.
+	short offset = 5 + value_size + strlen( description ); 
+	ptr = Insert( ptr, (unsigned char *) &offset, sizeof( offset ) );
+	*(ptr++) = value_size;
+	*(ptr++) = 0;
+	ptr = Insert( ptr, value, value_size );
+	char description_length = strlen( description );
+	*(ptr++) = description_length;
+	ptr = Insert( ptr, (unsigned char *) description, description_length );
+	return( ptr );
+
+}
+
+char *MDFRecord::InsertParameterArray( char *ptr, int group, char *name, char *description, int value_size, int dimensions, unsigned char *array_limits, unsigned char *array ){
+
+	*(ptr++) = strlen( name );
+	*(ptr++) = group;
+	ptr = Insert( ptr, (unsigned char *) name, strlen( name ) );
+	// Compute offset to next parameter block.
+	// offset (short) + type (char) + dimensions (char) + description length (char) = 5
+	// plus the size of the array limits vector,
+	// plus the size of the array of values
+	// plus the size of the description.
+	short offset = 5 + dimensions + strlen( description ); 
+	short values = 1;
+	for ( int i = 0; i < dimensions; i++ ) values *= array_limits[i];
+	offset += (values * abs( value_size ) );
+	ptr = Insert( ptr, (unsigned char *) &offset, sizeof( offset ) );
+	*(ptr++) = value_size;
+	*(ptr++) = dimensions;
+	ptr = Insert( ptr, array_limits, dimensions );
+	ptr = Insert( ptr, array, values * abs( value_size ) );
+	char description_length = strlen( description );
+	*(ptr++) = description_length;
+	ptr = Insert( ptr, (unsigned char *) description, description_length );
+	return( ptr );
+
+}
+
+char *MDFRecord::InsertStringArray( char *ptr, int group, char *name, char *description, int string_length, int n_strings, char **strings ) {
+	unsigned char limits[2] = { string_length, n_strings };
+	char buffer[256 * 256];
+	char *local_ptr;
+	int i;
+	for ( i = 0,  local_ptr = buffer; i < n_strings; i++, local_ptr += string_length ) {
+		// In a C3D file, all marker descriptions have to have the same length.
+		// But the lengths of the marker names in the MDF file are variable length.
+		// So prefill the C3D description with blanks so that what comes after the
+		// actual string length is printable.
+		for ( int j = 0; j < string_length; j++ ) *(local_ptr+j) = ' ';
+		int bytes = strlen( strings[i] );
+		memcpy( local_ptr, strings[i], bytes );
+	}
+	ptr = InsertParameterArray( ptr, group, name, description, -1, 2, limits, (unsigned char *) buffer );
+	return( ptr );
+}
+
+void MDFRecord::WriteC3D( const char *filename ) {
+
+	//Structure of the C3D header.
+	struct {
+
+		unsigned short	tip;
+		short	markers;
+		short	samples;
+		short	first_3D;
+		short	last_3D;
+		short	max_interpolation;
+		float	scaling;
+		short	start_of_data_block;
+		short	samples_per_frame;
+		float	frame_rate;
+		short	reserved1[135];
+		short	labels_present;
+		short	labels_block_start;
+		short	quad_labels;
+		short	events;
+		short	reseverd2;
+		float	event_times[18];
+		char	event_flag[18];	
+		short	reserved3;
+		char	label[18][4];
+		short	reserved4[22];
+
+	} header;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	//// Open a known good C3D file. This is used only for reverse engineering. Should be deleted.
+	//int size = sizeof( header);
+	//FILE *fpg = fopen( "Eb015pr.c3d", "rb" );
+	//if ( !fpg ) {
+	//	fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", "Eb015pr.c3d" );
+	//	return;
+	//}
+	//// Read and discard the header from the 'good' file.
+	//fread( &header, sizeof( header ), 1, fpg );
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	// Open the output file.
+	FILE *fp = fopen( filename, "wb" );
+	if ( !fp ) {
+		fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", filename );
+		return;
+	}
+
+	// Where is the data in the file? 
+	// Add one for the header and another 'cause they use FORTRAN base 1.
+	int start_of_data_block = PARAMETER_BUFFER_BLOCKS + 2;
+
+	header.markers = nMarkers;
+	header.samples_per_frame = analogRate / markerRate;
+	header.samples = nAnalogChannels * header.samples_per_frame;
+	header.frame_rate = markerRate;
+
+	// It is not clear to me why one can specify the first and last frame.
+	// First is always 1 for us and last frame is the number of frames. 
+	header.first_3D = 1;
+	header.last_3D = nMarkerSamples;
+
+	// Required first word. Parameter block at 2 (base 1), 0x50 in upper byte per spec.
+	header.tip = 0x5002;
+
+	header.start_of_data_block = start_of_data_block; 
+
+	// How to scale coordinates. Negative valuse means that coordinates are stored as floats.
+	header.scaling = -1.0f;
+
+	// By default, no events. I don't know if .mdf files carry events.
+	header.events = 0;
+	header.labels_present = 0;
+	header.quad_labels = 12345;
+
+	// CODA does not impose a maximum interpolation gap, so I put a really big number.
+	header.max_interpolation = 32535;
+
+	// Write the header to the C3D file.
+	fwrite( &header, sizeof( header ), 1, fp );
+
+	// Fill the parameter section.
+
+	// A buffer to hold the parameter definitions.
+	char parameters[512 * PARAMETER_BUFFER_BLOCKS];
+
+	// Constants that get inserted into the C3D file.
+
+	const struct {
+		char skip[2];
+		unsigned char number_of_parameter_blocks; 
+		char processor_type;			// 84 = INTEL, 85 = DEC, 86 = MIPS
+	} parameter_header = { { 0, 0 }, PARAMETER_BUFFER_BLOCKS, 84 };
+
+	const char PointGroup[10] = { 5, POINT_GROUP, 'P', 'O', 'I', 'N', 'T', 3, 0, 0 };
+	const char AnalogGroup[11] = { 6, ANALOG_GROUP, 'A', 'N', 'A', 'L', 'O', 'G', 3, 0, 0 };
+
+	char *ptr = parameters;
+	ptr = Insert( ptr, (unsigned char *) &parameter_header, sizeof( parameter_header ) );
+	ptr = Insert( ptr, (unsigned char *) &PointGroup, sizeof( PointGroup ) );
+	ptr = Insert( ptr, (unsigned char *) &AnalogGroup, sizeof( AnalogGroup ) );
+	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "DATA_START", "Starting block of marker data.", start_of_data_block );
+	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "USED", "Number of markers.", nMarkers );
+	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "FRAMES", "Number of marker frames.", nMarkerSamples );
+	ptr = InsertParameterFloat( ptr, abs( POINT_GROUP ), "RATE", "Marker frame rate (Hz).", markerRate );
+	ptr = InsertParameterFloat( ptr, abs( POINT_GROUP ), "SCALE", "Marker distance scaling (ignored because we use floating point).", -1.0 );
+	ptr = InsertParameterString( ptr, abs( POINT_GROUP ), "UNITS", "Units of distance.", "mm" );
+
+	// MDF files can contain marker names. As far as I know they don't also have more elaborate descriptions.
+	// The C3D specification talks about 4 being the nominal size of a marker (POINT) name.
+	// Here I use the MDF marker name as the description in all cases.
+	// Then, according to the longLabels flag, I either uses the MDF names as the POINT:LABELS in the C3D files,
+	// or I create 4 character names.
+	char *marker_descriptions[256];
+	int max_marker_description_length = 0;
+	for ( unsigned int i = 0; i < nMarkers; i++ ) {
+		int bytes = strlen( markerName[i] );
+		if ( bytes > max_marker_description_length ) max_marker_description_length = bytes;
+		marker_descriptions[i] = (char *) malloc( bytes + 1 ) ;
+		strcpy( marker_descriptions[i], markerName[i] );
+	}
+	ptr = InsertStringArray( ptr, abs( POINT_GROUP ), "DESCRIPTIONS", "Marker descriptions.", max_marker_description_length, nMarkers, marker_descriptions );
+
+	if ( longLabels ) {
+		ptr = InsertStringArray( ptr, abs( POINT_GROUP ), "LABELS", "Long Marker Labels.", max_marker_description_length, nMarkers, marker_descriptions );
+	}
+	else {
+		char *marker_labels[256];
+		for ( unsigned int i = 0; i < nMarkers; i++ ) {
+			marker_labels[i] = (char *) malloc( 8 );
+			sprintf( marker_labels[i], "M%03u", i + 1 );
+		}
+		ptr = InsertStringArray( ptr, abs( POINT_GROUP ), "LABELS", "Short Marker Labels.", 4, nMarkers, marker_labels );
+		for ( unsigned int i = 0; i < nMarkers; i++ ) free( marker_labels[i] );
+	}
+	for ( unsigned int i = 0; i < nMarkers; i++ ) free( marker_descriptions[i] );
+
+	ptr = InsertParameterShort( ptr, abs( ANALOG_GROUP), "USED", "Number of analog channels.", nAnalogChannels );
+	ptr = InsertParameterFloat( ptr, abs( ANALOG_GROUP), "GEN_SCALE", "Global scaling of analog values.", 1.0 );
+	float analog_scale[256];
+	for ( unsigned int i = 0; i < nAnalogChannels; i++ ) analog_scale[i] = 1.0f;
+	ptr = InsertFloatArray( ptr, abs( ANALOG_GROUP), "SCALE", "Individual scaling of analog values.", nAnalogChannels, analog_scale );
+
+	char *analog_descriptions[256];
+	int max_analog_description_length = 0;
+	for ( unsigned int i = 0; i < nAnalogChannels; i++ ) {
+		int bytes = strlen( analogChannelName[i] );
+		if ( bytes > max_analog_description_length ) max_analog_description_length = bytes;
+		analog_descriptions[i] = (char *) malloc( bytes + 1 ) ;
+		strcpy( analog_descriptions[i], analogChannelName[i] );
+	}
+	ptr = InsertStringArray( ptr, abs( ANALOG_GROUP ), "DESCRIPTIONS", "Channel Descriptions.", max_analog_description_length, nAnalogChannels, analog_descriptions );
+	if ( longLabels ) {
+		ptr = InsertStringArray( ptr, abs( ANALOG_GROUP ), "LABELS", "Long Channel Labels.", max_analog_description_length, nAnalogChannels, analog_descriptions );
+	}
+	else {
+		char *analog_labels[256];
+		for ( unsigned int i = 0; i < nAnalogChannels; i++ ) {
+			analog_labels[i] = (char *) malloc( 8 );
+			sprintf( analog_labels[i], "AD%02u", i + 1 );
+		}
+		ptr = InsertStringArray( ptr, abs( ANALOG_GROUP ), "LABELS", "Short Channel Labels.", 4, nAnalogChannels, analog_labels );
+		for ( unsigned int i = 0; i < nAnalogChannels; i++ ) free( analog_labels[i] );
+	}
+	for ( unsigned int i = 0; i < nAnalogChannels; i++ ) free( analog_descriptions[i] );
+
+	// Fill out with zeros. This will mark the end of the list.
+	while ( ptr < ( parameters + sizeof( parameters ) ) ) *(ptr++) = 0;
+
+	fwrite( parameters, sizeof( parameters ), 1, fp );
+
+	fclose( fp );
+
+}
+
 void MDFRecord::KeepOnly( int first_marker, int last_marker ) {
 
 	if ( last_marker < 0 ) last_marker = nMarkers - 1;
@@ -465,7 +716,7 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 				break;
 
 			case 19:
-				fAbortMessageOnCondition( ( entry->size != sizeof( *analogResolution ) || elements != 1 ), "MDF", "Error reading force resolution." );
+				fAbortMessageOnCondition( ( entry->size != sizeof( *analogResolution ) || elements != 1 ), "MDF", "Error reading analog resolution." );
 				items_read = fread( &analogResolution[j], entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading analog resolution for channel %d.", j );
 				break;
