@@ -305,3 +305,5 @@ MDFtoC3D/lowrate.txt
 MDFtoC3D/hirate.txt
 MDFtoC3D/analog.txt
 *.emt
+*.c3d
+*.C3D
