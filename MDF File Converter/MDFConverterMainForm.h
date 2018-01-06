@@ -74,11 +74,11 @@ namespace MDFFileConverter {
 			// 
 			this->outputBox->Controls->Add(this->emtRadioButton1);
 			this->outputBox->Controls->Add(this->c3dRadioButton1);
-			this->outputBox->Location = System::Drawing::Point(678, 15);
+			this->outputBox->Location = System::Drawing::Point(645, 15);
 			this->outputBox->Margin = System::Windows::Forms::Padding(6);
 			this->outputBox->Name = L"outputBox";
 			this->outputBox->Padding = System::Windows::Forms::Padding(6);
-			this->outputBox->Size = System::Drawing::Size(140, 114);
+			this->outputBox->Size = System::Drawing::Size(173, 114);
 			this->outputBox->TabIndex = 0;
 			this->outputBox->TabStop = false;
 			this->outputBox->Text = L"Output Type";
@@ -88,7 +88,7 @@ namespace MDFFileConverter {
 			this->emtRadioButton1->AutoSize = true;
 			this->emtRadioButton1->Location = System::Drawing::Point(31, 72);
 			this->emtRadioButton1->Name = L"emtRadioButton1";
-			this->emtRadioButton1->Size = System::Drawing::Size(48, 17);
+			this->emtRadioButton1->Size = System::Drawing::Size(86, 33);
 			this->emtRadioButton1->TabIndex = 1;
 			this->emtRadioButton1->TabStop = true;
 			this->emtRadioButton1->Text = L"EMT";
@@ -99,7 +99,7 @@ namespace MDFFileConverter {
 			this->c3dRadioButton1->AutoSize = true;
 			this->c3dRadioButton1->Location = System::Drawing::Point(31, 38);
 			this->c3dRadioButton1->Name = L"c3dRadioButton1";
-			this->c3dRadioButton1->Size = System::Drawing::Size(46, 17);
+			this->c3dRadioButton1->Size = System::Drawing::Size(81, 33);
 			this->c3dRadioButton1->TabIndex = 0;
 			this->c3dRadioButton1->TabStop = true;
 			this->c3dRadioButton1->Text = L"C3D";
@@ -111,7 +111,7 @@ namespace MDFFileConverter {
 				static_cast<System::Byte>(0)));
 			this->button1->Location = System::Drawing::Point(12, 25);
 			this->button1->Name = L"button1";
-			this->button1->Size = System::Drawing::Size(211, 104);
+			this->button1->Size = System::Drawing::Size(392, 104);
 			this->button1->TabIndex = 1;
 			this->button1->Text = L"Select MDF Files";
 			this->button1->UseVisualStyleBackColor = true;
@@ -138,7 +138,7 @@ namespace MDFFileConverter {
 			// 
 			// Form1
 			// 
-			this->AutoScaleDimensions = System::Drawing::SizeF(11, 24);
+			this->AutoScaleDimensions = System::Drawing::SizeF(14, 29);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(833, 628);
 			this->Controls->Add(this->logTextBox);
@@ -160,7 +160,7 @@ namespace MDFFileConverter {
 				 MDFRecord mdf;
 				 Enabled = false;
 				 if ( ::System::Windows::Forms::DialogResult::OK == openFileDialog1->ShowDialog() ) {
-					 DateTime thisDay = DateTime::Today;
+					 DateTime thisDay = DateTime::Now;
 					 this->logTextBox->AppendText( thisDay.ToString() );
 					 int files = openFileDialog1->FileNames->Length;
 					 for ( int i = 0; i < files; i++ ) {
@@ -190,7 +190,7 @@ namespace MDFFileConverter {
 							 logTextBox->AppendText( "\r\n     -> " + marker );
 							 String^ emg = input->Replace( ".mdf", "_emg.emt" );
 							 char* emg_filename = (char*) Marshal::StringToHGlobalAnsi( emg ).ToPointer();
-							 mdf.WriteMarkersEMT( emg_filename );
+							 mdf.WriteAnalogEMT( emg_filename );
 							 Marshal::FreeHGlobal(IntPtr( emg_filename ));
 							 logTextBox->AppendText( "\r\n     -> " + emg );
 						 }
