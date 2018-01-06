@@ -124,6 +124,9 @@ void MDFRecord::WriteC3D( const char *filename ) {
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
+	header.samples_per_frame = analogRate / markerRate;
+	if ( nAnalogSamples > 0 && header.samples_per_frame * markerRate != analogRate ) fAbortMessage( "MDFtoC3D", "MDFto3CD does not yet handle analog sampling frequencies that are non-integer multiples of the marker frequency." );
+
 	// Open the output file.
 	FILE *fp = fopen( filename, "wb" );
 	if ( !fp ) {
@@ -136,8 +139,6 @@ void MDFRecord::WriteC3D( const char *filename ) {
 	int start_of_data_block = PARAMETER_BUFFER_BLOCKS + 2;
 
 	header.markers = nMarkers;
-	header.samples_per_frame = analogRate / markerRate;
-	if ( header.samples_per_frame * markerRate != analogRate ) fAbortMessage( "MDFtoC3D", "MDFto3CD does not yet handle analog sampling frequencies that are non-integer multiples of the marker frequency." );
 
 	header.samples = nAnalogChannels * header.samples_per_frame;
 	header.frame_rate = markerRate;
