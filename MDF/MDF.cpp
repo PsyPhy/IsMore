@@ -7,7 +7,9 @@ using namespace MDF;
 
 #define POINT_GROUP	-1
 #define ANALOG_GROUP -2
-#define PARAMETER_BUFFER_BLOCKS	255
+#define BLOCK_SIZE	512
+#define PARAMETER_BUFFER_BLOCKS	8
+#define PARAMETER_BUFFER_BYTES (PARAMETER_BUFFER_BLOCKS * BLOCK_SIZE)
 
 char *MDFRecord::Insert( char *ptr, unsigned char *block, int bytes ){
 	memcpy( ptr, block, bytes );
@@ -135,13 +137,15 @@ void MDFRecord::WriteC3D( const char *filename ) {
 
 	header.markers = nMarkers;
 	header.samples_per_frame = analogRate / markerRate;
+	if ( header.samples_per_frame * markerRate != analogRate ) fAbortMessage( "MDFtoC3D", "MDFto3CD does not yet handle analog sampling frequencies that are non-integer multiples of the marker frequency." );
+
 	header.samples = nAnalogChannels * header.samples_per_frame;
 	header.frame_rate = markerRate;
 
 	// It is not clear to me why one can specify the first and last frame.
 	// First is always 1 for us and last frame is the number of frames. 
 	header.first_3D = 1;
-	header.last_3D = nMarkerSamples;
+	header.last_3D = nMarkerFrames;
 
 	// Required first word. Parameter block at 2 (base 1), 0x50 in upper byte per spec.
 	header.tip = 0x5002;
@@ -165,7 +169,9 @@ void MDFRecord::WriteC3D( const char *filename ) {
 	// Fill the parameter section.
 
 	// A buffer to hold the parameter definitions.
-	char parameters[512 * PARAMETER_BUFFER_BLOCKS];
+	// I allocate one extra block to allow for as an extra buffer, then I check
+	// frequently if the nominal number of blocks has been overrun.
+	char parameters[PARAMETER_BUFFER_BYTES + BLOCK_SIZE];
 
 	// Constants that get inserted into the C3D file.
 
@@ -184,10 +190,11 @@ void MDFRecord::WriteC3D( const char *filename ) {
 	ptr = Insert( ptr, (unsigned char *) &AnalogGroup, sizeof( AnalogGroup ) );
 	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "DATA_START", "Starting block of marker data.", start_of_data_block );
 	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "USED", "Number of markers.", nMarkers );
-	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "FRAMES", "Number of marker frames.", nMarkerSamples );
+	ptr = InsertParameterShort( ptr, abs( POINT_GROUP ), "FRAMES", "Number of marker frames.", nMarkerFrames );
 	ptr = InsertParameterFloat( ptr, abs( POINT_GROUP ), "RATE", "Marker frame rate (Hz).", markerRate );
 	ptr = InsertParameterFloat( ptr, abs( POINT_GROUP ), "SCALE", "Marker distance scaling (ignored because we use floating point).", -1.0 );
 	ptr = InsertParameterString( ptr, abs( POINT_GROUP ), "UNITS", "Units of distance.", "mm" );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
 
 	// MDF files can contain marker names. As far as I know they don't also have more elaborate descriptions.
 	// The C3D specification talks about 4 being the nominal size of a marker (POINT) name.
@@ -203,6 +210,7 @@ void MDFRecord::WriteC3D( const char *filename ) {
 		strcpy( marker_descriptions[i], markerName[i] );
 	}
 	ptr = InsertStringArray( ptr, abs( POINT_GROUP ), "DESCRIPTIONS", "Marker descriptions.", max_marker_description_length, nMarkers, marker_descriptions );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
 
 	if ( longLabels ) {
 		ptr = InsertStringArray( ptr, abs( POINT_GROUP ), "LABELS", "Long Marker Labels.", max_marker_description_length, nMarkers, marker_descriptions );
@@ -217,12 +225,31 @@ void MDFRecord::WriteC3D( const char *filename ) {
 		for ( unsigned int i = 0; i < nMarkers; i++ ) free( marker_labels[i] );
 	}
 	for ( unsigned int i = 0; i < nMarkers; i++ ) free( marker_descriptions[i] );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
 
 	ptr = InsertParameterShort( ptr, abs( ANALOG_GROUP), "USED", "Number of analog channels.", nAnalogChannels );
+	ptr = InsertParameterShort( ptr, abs( ANALOG_GROUP), "BITS", "Number of ADC bits.", 16 );
 	ptr = InsertParameterFloat( ptr, abs( ANALOG_GROUP), "GEN_SCALE", "Global scaling of analog values.", 1.0 );
+	ptr = InsertParameterFloat( ptr, abs( ANALOG_GROUP ), "RATE", "Analog sample rate (Hz).", analogRate );
 	float analog_scale[256];
-	for ( unsigned int i = 0; i < nAnalogChannels; i++ ) analog_scale[i] = 1.0f;
+	short analog_offset[256];
+	char  *analog_units[256];
+	for ( unsigned int i = 0; i < nAnalogChannels; i++ ) {
+		// We are going to store the analog data as floats, so no scaling or offset required.
+		analog_scale[i] = 1.0;
+		analog_offset[i] = 0;
+		// There is some confusion in the CodaMotion documentation about mV versus microV.
+		// I believe that the data is in mV.
+		analog_units[i] = "mV";
+	}
 	ptr = InsertFloatArray( ptr, abs( ANALOG_GROUP), "SCALE", "Individual scaling of analog values.", nAnalogChannels, analog_scale );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
+	ptr = InsertShortArray( ptr, abs( ANALOG_GROUP), "OFFSET", "Individual offset of analog values.", nAnalogChannels, analog_offset );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
+	ptr = InsertStringArray( ptr, abs( ANALOG_GROUP ), "UNITS", "Analog data units.", 4, nAnalogChannels, analog_units );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
+	ptr = InsertParameterString( ptr, abs( ANALOG_GROUP ), "FORMAT", "Binary format of offset (SIGNED or UNSIGNED).", "SIGNED" );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
 
 	char *analog_descriptions[256];
 	int max_analog_description_length = 0;
@@ -233,6 +260,7 @@ void MDFRecord::WriteC3D( const char *filename ) {
 		strcpy( analog_descriptions[i], analogChannelName[i] );
 	}
 	ptr = InsertStringArray( ptr, abs( ANALOG_GROUP ), "DESCRIPTIONS", "Channel Descriptions.", max_analog_description_length, nAnalogChannels, analog_descriptions );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
 	if ( longLabels ) {
 		ptr = InsertStringArray( ptr, abs( ANALOG_GROUP ), "LABELS", "Long Channel Labels.", max_analog_description_length, nAnalogChannels, analog_descriptions );
 	}
@@ -246,12 +274,48 @@ void MDFRecord::WriteC3D( const char *filename ) {
 		for ( unsigned int i = 0; i < nAnalogChannels; i++ ) free( analog_labels[i] );
 	}
 	for ( unsigned int i = 0; i < nAnalogChannels; i++ ) free( analog_descriptions[i] );
+	if ( ptr >= parameters + PARAMETER_BUFFER_BYTES ) fAbortMessage( "MDFtoC3D", "Parameter data exceeds parameter header size. %d %d", ptr - parameters, PARAMETER_BUFFER_BYTES );
 
 	// Fill out with zeros. This will mark the end of the list.
-	while ( ptr < ( parameters + sizeof( parameters ) ) ) *(ptr++) = 0;
+	while ( ptr < ( parameters + PARAMETER_BUFFER_BYTES ) ) *(ptr++) = 0;
 
-	fwrite( parameters, sizeof( parameters ), 1, fp );
+	// Write the parameter section to the file.
+	fwrite( parameters, PARAMETER_BUFFER_BYTES, 1, fp );
 
+	// Now write the data, frame by frame.
+	// This structure holds one frame of marker data.
+	// It is dimensioned to hold the max number of markers (256),
+	// but only actual number of markers will be written.
+	struct {
+		Vector3f	position;
+		unsigned short	visibility;
+		unsigned short	residual;
+	} local_marker[256];
+	int bytes_per_frame = sizeof( *local_marker );
+	// This array holds one slice of analog samples.
+	// Each marker frame has header.samples_per_frame slices.
+	float local_analog[256];
+	unsigned int ana = 0;
+	int marker_items_written;
+	int analog_items_written;
+	unsigned long bytes_written = 0;
+	for ( unsigned int frm = 0; frm < nMarkerFrames && ana < nAnalogSamples; frm ++ ) {
+		for ( unsigned int mrk = 0; mrk < nMarkers && mrk < 256; mrk++ ) {
+			CopyVector( local_marker[mrk].position, marker[mrk][frm] );
+			if ( markerVisibility[mrk][frm] ) local_marker[mrk].visibility = 1;
+			else local_marker[mrk].visibility = 0;
+			local_marker[mrk].residual = 1;
+		}
+		marker_items_written = fwrite( local_marker, sizeof( *local_marker ), nMarkers, fp );
+		bytes_written += (sizeof( local_marker ) * marker_items_written );
+		for ( int repeat = 0; repeat < header.samples_per_frame; repeat++, ana++ ) {
+			for ( unsigned int chan = 0; chan < nAnalogChannels; chan++ ) local_analog[chan] = analog[chan][ana];
+			analog_items_written = fwrite( local_analog, sizeof( *local_analog), nAnalogChannels, fp );
+			bytes_written += ( sizeof( *local_analog) * analog_items_written );
+		}
+	}
+	unsigned char zero = 0;
+	fwrite( &zero, sizeof( zero ), bytes_written % BLOCK_SIZE, fp );
 	fclose( fp );
 
 }
@@ -319,7 +383,7 @@ void MDFRecord::WriteMarkersEMT( const char *filename ) {
 	fprintf( fp, "BTS ASCII format\n\nType:         \tPoint 3D tracks\nMeasure unit:\tm\n\n" );
 	fprintf( fp, "Tracks:       \t%d\n", nMarkers );
 	fprintf( fp, "Frequency:    \t%d Hz\n", markerRate );
-	fprintf( fp, "Frames:       \t%d\n", nMarkerSamples );
+	fprintf( fp, "Frames:       \t%d\n", nMarkerFrames );
 	fprintf( fp, "Start Time:   \t%8.6f\n", 0.0 );
 
 	fprintf( fp, "Frame\tTime" );
@@ -328,7 +392,7 @@ void MDFRecord::WriteMarkersEMT( const char *filename ) {
 	}
 	fprintf( fp, "\n" );
 
-	for ( unsigned int sample = 0; sample < nMarkerSamples; sample++ ) {
+	for ( unsigned int sample = 0; sample < nMarkerFrames; sample++ ) {
 		fprintf( fp, "%d\t%8.3f", sample, (double) sample * markerInterval );
 		for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
 			if ( markerVisibility[mrk][sample] ) fprintf( fp, "\t%8.4f\t%8.4f\t%8.4f", marker[mrk][sample][X], marker[mrk][sample][Y], marker[mrk][sample][Z] );
@@ -372,7 +436,7 @@ void MDFRecord::WriteMarkersASCII( const char *filename ) {
 	}
 	fprintf( fp, "\n" );
 
-	for ( unsigned int sample = 0; sample < nMarkerSamples; sample++ ) {
+	for ( unsigned int sample = 0; sample < nMarkerFrames; sample++ ) {
 		fprintf( fp, "%d\t%8.3f", sample, (double) sample * markerInterval );
 		for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
 			if ( markerVisibility[mrk][sample] ) fprintf( fp, "\t1\t%8.4f\t%8.4f\t%8.4f", marker[mrk][sample][X], marker[mrk][sample][Y], marker[mrk][sample][Z] );
@@ -403,20 +467,20 @@ void MDFRecord::FillGaps( void ) {
 
 		if ( 0 == mrk % 28 ) fprintf( stderr, " | " );
 		fprintf( stderr, "." );
-		for ( sample = 0; sample < nMarkerSamples; sample++ ) {
+		for ( sample = 0; sample < nMarkerFrames; sample++ ) {
 			if ( markerVisibility[mrk][sample] ) break;
 		}
-		if ( sample < nMarkerSamples ) {
+		if ( sample < nMarkerFrames ) {
 			for ( unsigned int i = 0; i < sample; i++ ) {
 				CopyVector( marker[mrk][i], marker[mrk][sample] );
 				markerVisibility[mrk][i] = true;
 			}
 		
-			for ( s_sample = (int) (nMarkerSamples - 1); s_sample >= 0; s_sample-- ) {
+			for ( s_sample = (int) (nMarkerFrames - 1); s_sample >= 0; s_sample-- ) {
 				if ( markerVisibility[mrk][s_sample] ) break;
 			}
 			if ( s_sample >= 0 ) {
-				for ( unsigned int i = (unsigned) s_sample + 1; i < nMarkerSamples; i++ ) {
+				for ( unsigned int i = (unsigned) s_sample + 1; i < nMarkerFrames; i++ ) {
 					CopyVector( marker[mrk][i], marker[mrk][s_sample] );
 					markerVisibility[mrk][i] = true;
 				}
@@ -429,7 +493,7 @@ void MDFRecord::FillGaps( void ) {
 				for ( int i = before; i * markerInterval <= sample * analogInterval; i++ ) {
 					if ( markerVisibility[mrk][i] ) before = i;
 				}
-				for ( after = before + 1; after < nMarkerSamples && after * markerInterval >= sample * analogInterval; after++ ) {
+				for ( after = before + 1; after < nMarkerFrames && after * markerInterval >= sample * analogInterval; after++ ) {
 					if ( markerVisibility[mrk][after] ) break;
 				}
 				double relative = (double)( sample * analogInterval - before * markerInterval ) / (double) ( ( after - before ) * markerInterval );
@@ -455,14 +519,14 @@ void MDFRecord::FillGaps( void ) {
 	fprintf( stderr, "\n" );
 	markerRate = analogRate;
 	markerInterval = analogInterval;
-	nMarkerSamples = nAnalogSamples;
+	nMarkerFrames = nAnalogSamples;
 }
 
 
 char *MDF::HeaderTypeName[] = 
 { "TextComments", "Date", "MarkerPosition", "Analog'", "InView", "EventData", "SamplingRateMarkers", 
 "SamplingRateADC", "SamplingRateEvent", "TimeScale", "GraphCursor", "MarkerResolution", "HardwareMarkers",
-"Identifier", "nMarkerSamples", "nADCSamples" };
+"Identifier", "nMarkerFrames", "nADCSamples" };
 
 int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 
@@ -626,7 +690,7 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 				items_read = fread( iMarker[j], entry->size, elements, fp );
 				fAbortMessageOnCondition( items_read != elements, "MDF", "Error reading marker data for marker %d.", j );
 				nMarkers = entry->nArrays;
-				nMarkerSamples = elements;
+				nMarkerFrames = elements;
 				break;
 
 			case 3:	// Analog Force Data
@@ -767,9 +831,9 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 	marker = (Vector3 **) malloc( nMarkers * sizeof( *force ) );
 	fAbortMessageOnCondition( !marker, "MDF", "Error allocating memory for marker pointers." );
 	for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
-		marker[mrk] = (Vector3 *) malloc( nMarkerSamples * sizeof( *marker[mrk] ));
+		marker[mrk] = (Vector3 *) malloc( nMarkerFrames * sizeof( *marker[mrk] ));
 		fAbortMessageOnCondition( !marker[mrk], "MDF", "Error allocating memory for marker vector array %d.", mrk );
-		for ( unsigned int sample = 0; sample < nMarkerSamples; sample++ ) {
+		for ( unsigned int sample = 0; sample < nMarkerFrames; sample++ ) {
 			for ( int j = 0; j < 3; j++ ) {
 				marker[mrk][sample][j] = (double) iMarker[mrk][sample*3+j] * (double) markerResolution[mrk] / 1000000.0;
 			}

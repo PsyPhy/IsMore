@@ -51,7 +51,7 @@ namespace MDF {
 		PsyPhy::Vector3	**marker;
 		bool	**markerVisibility;
 		unsigned int	nMarkers;
-		unsigned int	nMarkerSamples;
+		unsigned int	nMarkerFrames;
 		unsigned short	markerRate;
 		double			markerInterval;
 		unsigned short	*markerResolution;
@@ -114,6 +114,10 @@ namespace MDF {
 			unsigned char c_values = n_values;
 			return( InsertParameterArray( ptr, group, name, description, sizeof( float ), 1, &c_values, (unsigned char *) values ) );
 		}
+		char *InsertShortArray( char *ptr, int group, char *name, char *description, int n_values, short *values ) {
+			unsigned char c_values = n_values;
+			return( InsertParameterArray( ptr, group, name, description, sizeof( short ), 1, &c_values, (unsigned char *) values ) );
+		}
 
 		char *InsertStringArray( char *ptr, int group, char *name, char *description, int string_length, int n_strings, char **strings );
 		char *InsertParameterString( char *ptr, int group, char *name, char *description, char *value ) {
@@ -144,7 +148,7 @@ namespace MDF {
 			nForceSamples( 0 ),
 			nAnalogChannels( 0 ),
 			nAnalogSamples( 0 ),
-			nMarkerSamples( 0 ),
+			nMarkerFrames( 0 ),
 			nMarkers( 0 ),
 
 			longLabels( true ) // Determines if C3D marker names are 4 chars or more.
