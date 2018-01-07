@@ -47,6 +47,8 @@ namespace MDFFileConverter {
 	private: System::Windows::Forms::TextBox^  logTextBox;
 	private: System::Windows::Forms::GroupBox^  outputBox;
 	private: System::Windows::Forms::OpenFileDialog^  openFileDialog1;
+	private: System::Windows::Forms::RadioButton^  txtRadioButton1;
+	private: System::Windows::Forms::CheckBox^  keepOnlyCheckBox1;
 
 	private:
 		/// <summary>
@@ -62,26 +64,39 @@ namespace MDFFileConverter {
 		void InitializeComponent(void)
 		{
 			this->outputBox = (gcnew System::Windows::Forms::GroupBox());
+			this->txtRadioButton1 = (gcnew System::Windows::Forms::RadioButton());
 			this->emtRadioButton1 = (gcnew System::Windows::Forms::RadioButton());
 			this->c3dRadioButton1 = (gcnew System::Windows::Forms::RadioButton());
 			this->button1 = (gcnew System::Windows::Forms::Button());
 			this->logTextBox = (gcnew System::Windows::Forms::TextBox());
 			this->openFileDialog1 = (gcnew System::Windows::Forms::OpenFileDialog());
+			this->keepOnlyCheckBox1 = (gcnew System::Windows::Forms::CheckBox());
 			this->outputBox->SuspendLayout();
 			this->SuspendLayout();
 			// 
 			// outputBox
 			// 
+			this->outputBox->Controls->Add(this->txtRadioButton1);
 			this->outputBox->Controls->Add(this->emtRadioButton1);
 			this->outputBox->Controls->Add(this->c3dRadioButton1);
-			this->outputBox->Location = System::Drawing::Point(645, 15);
+			this->outputBox->Location = System::Drawing::Point(689, 15);
 			this->outputBox->Margin = System::Windows::Forms::Padding(6);
 			this->outputBox->Name = L"outputBox";
 			this->outputBox->Padding = System::Windows::Forms::Padding(6);
-			this->outputBox->Size = System::Drawing::Size(173, 114);
+			this->outputBox->Size = System::Drawing::Size(129, 140);
 			this->outputBox->TabIndex = 0;
 			this->outputBox->TabStop = false;
 			this->outputBox->Text = L"Output Type";
+			// 
+			// txtRadioButton1
+			// 
+			this->txtRadioButton1->AutoSize = true;
+			this->txtRadioButton1->Location = System::Drawing::Point(31, 103);
+			this->txtRadioButton1->Name = L"txtRadioButton1";
+			this->txtRadioButton1->Size = System::Drawing::Size(66, 28);
+			this->txtRadioButton1->TabIndex = 2;
+			this->txtRadioButton1->Text = L"TXT";
+			this->txtRadioButton1->UseVisualStyleBackColor = true;
 			// 
 			// emtRadioButton1
 			// 
@@ -90,13 +105,13 @@ namespace MDFFileConverter {
 			this->emtRadioButton1->Name = L"emtRadioButton1";
 			this->emtRadioButton1->Size = System::Drawing::Size(69, 28);
 			this->emtRadioButton1->TabIndex = 1;
-			this->emtRadioButton1->TabStop = true;
 			this->emtRadioButton1->Text = L"EMT";
 			this->emtRadioButton1->UseVisualStyleBackColor = true;
 			// 
 			// c3dRadioButton1
 			// 
 			this->c3dRadioButton1->AutoSize = true;
+			this->c3dRadioButton1->Checked = true;
 			this->c3dRadioButton1->Location = System::Drawing::Point(31, 38);
 			this->c3dRadioButton1->Name = L"c3dRadioButton1";
 			this->c3dRadioButton1->Size = System::Drawing::Size(64, 28);
@@ -109,9 +124,9 @@ namespace MDFFileConverter {
 			// 
 			this->button1->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 24, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
-			this->button1->Location = System::Drawing::Point(12, 25);
+			this->button1->Location = System::Drawing::Point(12, 15);
 			this->button1->Name = L"button1";
-			this->button1->Size = System::Drawing::Size(392, 104);
+			this->button1->Size = System::Drawing::Size(392, 84);
 			this->button1->TabIndex = 1;
 			this->button1->Text = L"Select MDF Files";
 			this->button1->UseVisualStyleBackColor = true;
@@ -136,11 +151,22 @@ namespace MDFFileConverter {
 			this->openFileDialog1->Multiselect = true;
 			this->openFileDialog1->ReadOnlyChecked = true;
 			// 
+			// keepOnlyCheckBox1
+			// 
+			this->keepOnlyCheckBox1->AutoSize = true;
+			this->keepOnlyCheckBox1->Location = System::Drawing::Point(57, 118);
+			this->keepOnlyCheckBox1->Name = L"keepOnlyCheckBox1";
+			this->keepOnlyCheckBox1->Size = System::Drawing::Size(309, 28);
+			this->keepOnlyCheckBox1->TabIndex = 3;
+			this->keepOnlyCheckBox1->Text = L"Keep only main makers (max 28).";
+			this->keepOnlyCheckBox1->UseVisualStyleBackColor = true;
+			// 
 			// Form1
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(11, 24);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(833, 628);
+			this->Controls->Add(this->keepOnlyCheckBox1);
 			this->Controls->Add(this->logTextBox);
 			this->Controls->Add(this->button1);
 			this->Controls->Add(this->outputBox);
@@ -166,12 +192,18 @@ namespace MDFFileConverter {
 					 int files = openFileDialog1->FileNames->Length;
 					 for ( int i = 0; i < files; i++ ) {
 
+						String^ input = openFileDialog1->FileNames[i];
+						logTextBox->AppendText( "\r\n  " + input );
+						char* mdf_filename = (char*) Marshal::StringToHGlobalAnsi( input ).ToPointer();
+						mdf.ReadDataFile( mdf_filename );
+						Marshal::FreeHGlobal(IntPtr( mdf_filename ));
+
+						if ( keepOnlyCheckBox1->Checked ) {
+							mdf.KeepOnly( 0, 27 );
+							input = input->Replace( ".mdf", "_(1-28).mdf" );
+						}
+
 						 if ( c3dRadioButton1->Checked ) {
-							 String^ input = openFileDialog1->FileNames[i];
-							 logTextBox->AppendText( "\r\n  " + input );
-							 char* mdf_filename = (char*) Marshal::StringToHGlobalAnsi( input ).ToPointer();
-							 mdf.ReadDataFile( mdf_filename );
-							 Marshal::FreeHGlobal(IntPtr( mdf_filename ));
 							 String^ output = input->Replace( ".mdf", ".c3d" );
 							 char* c3d_filename = (char*) Marshal::StringToHGlobalAnsi( output ).ToPointer();
 							 mdf.WriteC3D( c3d_filename );
@@ -179,11 +211,6 @@ namespace MDFFileConverter {
 							 logTextBox->AppendText( "\r\n     -> " + output );
 						 }
 						 if ( emtRadioButton1->Checked ) {
-							 String^ input = openFileDialog1->FileNames[i];
-							 logTextBox->AppendText( "\r\n  " + input );
-							 char* mdf_filename = (char*) Marshal::StringToHGlobalAnsi( input ).ToPointer();
-							 mdf.ReadDataFile( mdf_filename );
-							 Marshal::FreeHGlobal(IntPtr( mdf_filename ));
 							 String^ marker = input->Replace( ".mdf", "_mrk.emt" );
 							 char* mrk_filename = (char*) Marshal::StringToHGlobalAnsi( marker ).ToPointer();
 							 mdf.WriteMarkersEMT( mrk_filename );
@@ -195,7 +222,19 @@ namespace MDFFileConverter {
 							 Marshal::FreeHGlobal(IntPtr( emg_filename ));
 							 logTextBox->AppendText( "\r\n     -> " + emg );
 						 }
+						 if ( txtRadioButton1->Checked ) {
 
+							 logTextBox->AppendText( "\r\n     -> Up-sampling markers to analog rate." );
+							 mdf.FillGaps();
+
+							 logTextBox->AppendText( "\r\n     -> Writing ASCII text file." );
+							 String^ text = input->Replace( ".mdf", ".txt" );
+							 char *txt_filename = (char*) Marshal::StringToHGlobalAnsi( text ).ToPointer();
+							 mdf.WriteASCII( txt_filename );
+							 Marshal::FreeHGlobal(IntPtr( txt_filename ));
+							 logTextBox->AppendText( "\r\n     -> " + text );
+
+						 }
 					 }
 					logTextBox->AppendText( "\r\n  Done.\r\n\r\n" );
 				 }

@@ -448,6 +448,33 @@ void MDFRecord::WriteMarkersASCII( const char *filename ) {
 	fclose( fp );
 }
 
+void MDFRecord::WriteASCII( const char *filename ) {
+
+	if ( markerRate != analogRate ) fAbortMessage( "MDF", "Cannot write single ASCII file with different rates for markers and analog samples.\nUse FillGaps() to interpolate markers to match analog rate." );
+	FILE *fp = fopen( filename, "w" );
+	if ( !fp ) {
+		fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", filename );
+		return;
+	}
+
+	fprintf( fp, "frame\ttime" );
+	for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) fprintf( fp, "\t%s.V\t%s.X\t%s.Y\t%s.Z", markerName[mrk], markerName[mrk], markerName[mrk], markerName[mrk] );
+	for ( unsigned int channel = 0; channel < nAnalogChannels; channel++ ) fprintf( fp, "\t%s", analogChannelName[channel] );
+	fprintf( fp, "\n" );
+
+	for ( unsigned int sample = 0; sample < nMarkerFrames; sample++ ) {
+		fprintf( fp, "%d\t%8.3f", sample, (double) sample * markerInterval );
+		for ( unsigned int mrk = 0; mrk < nMarkers; mrk++ ) {
+			if ( markerVisibility[mrk][sample] ) fprintf( fp, "\t1\t%8.4f\t%8.4f\t%8.4f", marker[mrk][sample][X], marker[mrk][sample][Y], marker[mrk][sample][Z] );
+			else fprintf( fp, "\t0\t%8.4f\t%8.4f\t%8.4f", 0.0, 0.0, 0.0 );
+		}
+		for ( unsigned int channel = 0; channel < nAnalogChannels; channel++ ) fprintf( fp, "\t%8.4f", analog[channel][sample] );
+		fprintf( fp, "\n" );
+	}
+	fclose( fp );
+}
+
+
 void MDFRecord::FillGaps( void ) {
 
 	unsigned int mrk, sample;

@@ -87,10 +87,14 @@ namespace MDF {
 
 	public:
 		int		ReadDataFile( const char *filename, bool verbose = false );
+
 		void	WriteMarkersASCII( const char *filename );
 		void	WriteAnalogASCII( const char *filename );
+		void	WriteASCII( const char *filename );
+
 		void	WriteMarkersEMT( const char *filename );
 		void	WriteAnalogEMT( const char *filename );
+	
 		void	KeepOnly( int first_marker, int last_marker = -1 );
 		void	FillGaps( void );
 
