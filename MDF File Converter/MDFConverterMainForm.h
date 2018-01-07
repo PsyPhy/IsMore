@@ -79,11 +79,11 @@ namespace MDFFileConverter {
 			this->outputBox->Controls->Add(this->txtRadioButton1);
 			this->outputBox->Controls->Add(this->emtRadioButton1);
 			this->outputBox->Controls->Add(this->c3dRadioButton1);
-			this->outputBox->Location = System::Drawing::Point(689, 15);
+			this->outputBox->Location = System::Drawing::Point(618, 15);
 			this->outputBox->Margin = System::Windows::Forms::Padding(6);
 			this->outputBox->Name = L"outputBox";
 			this->outputBox->Padding = System::Windows::Forms::Padding(6);
-			this->outputBox->Size = System::Drawing::Size(129, 140);
+			this->outputBox->Size = System::Drawing::Size(200, 140);
 			this->outputBox->TabIndex = 0;
 			this->outputBox->TabStop = false;
 			this->outputBox->Text = L"Output Type";
@@ -91,9 +91,9 @@ namespace MDFFileConverter {
 			// txtRadioButton1
 			// 
 			this->txtRadioButton1->AutoSize = true;
-			this->txtRadioButton1->Location = System::Drawing::Point(31, 103);
+			this->txtRadioButton1->Location = System::Drawing::Point(47, 98);
 			this->txtRadioButton1->Name = L"txtRadioButton1";
-			this->txtRadioButton1->Size = System::Drawing::Size(66, 28);
+			this->txtRadioButton1->Size = System::Drawing::Size(83, 33);
 			this->txtRadioButton1->TabIndex = 2;
 			this->txtRadioButton1->Text = L"TXT";
 			this->txtRadioButton1->UseVisualStyleBackColor = true;
@@ -101,9 +101,9 @@ namespace MDFFileConverter {
 			// emtRadioButton1
 			// 
 			this->emtRadioButton1->AutoSize = true;
-			this->emtRadioButton1->Location = System::Drawing::Point(31, 72);
+			this->emtRadioButton1->Location = System::Drawing::Point(47, 67);
 			this->emtRadioButton1->Name = L"emtRadioButton1";
-			this->emtRadioButton1->Size = System::Drawing::Size(69, 28);
+			this->emtRadioButton1->Size = System::Drawing::Size(86, 33);
 			this->emtRadioButton1->TabIndex = 1;
 			this->emtRadioButton1->Text = L"EMT";
 			this->emtRadioButton1->UseVisualStyleBackColor = true;
@@ -112,9 +112,9 @@ namespace MDFFileConverter {
 			// 
 			this->c3dRadioButton1->AutoSize = true;
 			this->c3dRadioButton1->Checked = true;
-			this->c3dRadioButton1->Location = System::Drawing::Point(31, 38);
+			this->c3dRadioButton1->Location = System::Drawing::Point(47, 33);
 			this->c3dRadioButton1->Name = L"c3dRadioButton1";
-			this->c3dRadioButton1->Size = System::Drawing::Size(64, 28);
+			this->c3dRadioButton1->Size = System::Drawing::Size(81, 33);
 			this->c3dRadioButton1->TabIndex = 0;
 			this->c3dRadioButton1->TabStop = true;
 			this->c3dRadioButton1->Text = L"C3D";
@@ -156,14 +156,14 @@ namespace MDFFileConverter {
 			this->keepOnlyCheckBox1->AutoSize = true;
 			this->keepOnlyCheckBox1->Location = System::Drawing::Point(57, 118);
 			this->keepOnlyCheckBox1->Name = L"keepOnlyCheckBox1";
-			this->keepOnlyCheckBox1->Size = System::Drawing::Size(309, 28);
+			this->keepOnlyCheckBox1->Size = System::Drawing::Size(390, 33);
 			this->keepOnlyCheckBox1->TabIndex = 3;
 			this->keepOnlyCheckBox1->Text = L"Keep only main makers (max 28).";
 			this->keepOnlyCheckBox1->UseVisualStyleBackColor = true;
 			// 
 			// Form1
 			// 
-			this->AutoScaleDimensions = System::Drawing::SizeF(11, 24);
+			this->AutoScaleDimensions = System::Drawing::SizeF(14, 29);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(833, 628);
 			this->Controls->Add(this->keepOnlyCheckBox1);
