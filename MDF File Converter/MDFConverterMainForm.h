@@ -88,7 +88,7 @@ namespace MDFFileConverter {
 			this->emtRadioButton1->AutoSize = true;
 			this->emtRadioButton1->Location = System::Drawing::Point(31, 72);
 			this->emtRadioButton1->Name = L"emtRadioButton1";
-			this->emtRadioButton1->Size = System::Drawing::Size(86, 33);
+			this->emtRadioButton1->Size = System::Drawing::Size(69, 28);
 			this->emtRadioButton1->TabIndex = 1;
 			this->emtRadioButton1->TabStop = true;
 			this->emtRadioButton1->Text = L"EMT";
@@ -99,7 +99,7 @@ namespace MDFFileConverter {
 			this->c3dRadioButton1->AutoSize = true;
 			this->c3dRadioButton1->Location = System::Drawing::Point(31, 38);
 			this->c3dRadioButton1->Name = L"c3dRadioButton1";
-			this->c3dRadioButton1->Size = System::Drawing::Size(81, 33);
+			this->c3dRadioButton1->Size = System::Drawing::Size(64, 28);
 			this->c3dRadioButton1->TabIndex = 0;
 			this->c3dRadioButton1->TabStop = true;
 			this->c3dRadioButton1->Text = L"C3D";
@@ -138,7 +138,7 @@ namespace MDFFileConverter {
 			// 
 			// Form1
 			// 
-			this->AutoScaleDimensions = System::Drawing::SizeF(14, 29);
+			this->AutoScaleDimensions = System::Drawing::SizeF(11, 24);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(833, 628);
 			this->Controls->Add(this->logTextBox);
@@ -158,6 +158,7 @@ namespace MDFFileConverter {
 #pragma endregion
 	private: System::Void button1_Click(System::Object^  sender, System::EventArgs^  e) {
 				 MDFRecord mdf;
+				 Refresh();
 				 Enabled = false;
 				 if ( ::System::Windows::Forms::DialogResult::OK == openFileDialog1->ShowDialog() ) {
 					 DateTime thisDay = DateTime::Now;
