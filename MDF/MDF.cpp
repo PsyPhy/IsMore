@@ -109,21 +109,6 @@ void MDFRecord::WriteC3D( const char *filename ) {
 
 	} header;
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
-
-	//// Open a known good C3D file. This is used only for reverse engineering. Should be deleted.
-	//int size = sizeof( header);
-	//FILE *fpg = fopen( "Eb015pr.c3d", "rb" );
-	//if ( !fpg ) {
-	//	fMessageBox( MB_OK, "MDF", "Error openning %s for writing.", "Eb015pr.c3d" );
-	//	return;
-	//}
-	//// Read and discard the header from the 'good' file.
-	//fread( &header, sizeof( header ), 1, fpg );
-
-
-	//////////////////////////////////////////////////////////////////////////////////////////////
-
 	header.samples_per_frame = analogRate / markerRate;
 	if ( nAnalogSamples > 0 && header.samples_per_frame * markerRate != analogRate ) fAbortMessage( "MDFtoC3D", "MDFto3CD does not yet handle analog sampling frequencies that are non-integer multiples of the marker frequency." );
 
