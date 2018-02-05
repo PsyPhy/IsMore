@@ -80,11 +80,6 @@ namespace MDF {
 		unsigned short	eventRate;
 		double			eventInterval;
 
-	private:
-
-		unsigned int	nHeaderEntries;
-		MDFHeaderEntry *headerEntryList;
-
 	public:
 		int		ReadDataFile( const char *filename, bool verbose = false );
 
@@ -131,7 +126,6 @@ namespace MDF {
 
 		// Constructor
 		MDFRecord ( void ) : 
-			headerEntryList( nullptr ),
 			iMarker( nullptr ),
 			marker( nullptr ),
 			markerVisibility( nullptr ),

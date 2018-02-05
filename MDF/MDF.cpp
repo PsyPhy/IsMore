@@ -575,15 +575,23 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 	sprintf( version, "%d.%03d", major, minor );
 	unsigned short entries;
 	fread( &entries, sizeof( entries ), 1, fp );
-	nHeaderEntries = entries;
-
-	headerEntryList = nullptr;
-	MDFHeaderEntry *last_entry = nullptr;
+	unsigned int nHeaderEntries = entries;
+	// Here we create a linked list of header entries.
+	// The class MDFHeaderEntry contains the information about each entry,
+	// plus pointers to create the linked list.
+	MDFHeaderEntry *headerEntryList = nullptr;				// Head of the list.
+	MDFHeaderEntry *last_entry = nullptr;	// Tail of the list.
 	for ( unsigned int i = 0; i < nHeaderEntries; i++ ) {
+		// I want to keep the entries in the original order, so new 
+		// entries will be added to the end of the list.
 		// Insert a new entry at the front of the linked list.
 		MDFHeaderEntry *new_entry = new MDFHeaderEntry();
+		// If the list is empty, the new entry becomes the head of the list.
 		if ( headerEntryList == nullptr ) headerEntryList = new_entry;
+		// If the list is not empty ( last_entry is not null) then the new 
+		// entry gets tacked on the end of the list.
 		if ( last_entry != nullptr ) last_entry->next = new_entry;
+		// Then the new entry becomes the last entry in the list.
 		last_entry = new_entry;
 		// Read the parameters of the new header entry.
 		unsigned char type;
@@ -598,18 +606,20 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 		new_entry->nArrays = n;
 	}
 
-	MDFHeaderEntry *entry = headerEntryList;
 	unsigned short elements;
 	unsigned int items_read;
 	unsigned char *packedVisibility;
 	unsigned short word, bit;
 
-	do {
+	// Step through the header entries to retrieve the data, starting at the head of the list.
+	while ( headerEntryList != nullptr ) {
+
+		MDFHeaderEntry *entry = headerEntryList;
 
 		// Allocate array pointers according to the entry type.
 		switch ( entry->type ) {
 
-			// For some types we do not allocate arrays of arrays, probably because we know that that type only has one array.
+		// For some types we do not allocate arrays of arrays, probably because we know that that type only has one array.
 		case 0:	// Comment
 		case 1:	// Date
 		case 7: // Marker Rate
@@ -617,7 +627,7 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 		case 9: // Analog Rate
 		case 10: // Event Rate
 
-			// For some others we just ignore the entry anyway.
+		// For some others we just ignore the entry anyway.
 		case 11: // Cursor Scale
 		case 12: // Cursor Position
 
@@ -852,8 +862,9 @@ int MDFRecord::ReadDataFile( const char *filename, bool verbose ) {
 
 			}
 		}
-		entry = entry->next;
-	} while ( entry != nullptr );
+		headerEntryList = entry->next;
+		delete entry;
+	}
 	
 	// Scale the marker data and turn them into vectors.
 	marker = (Vector3 **) malloc( nMarkers * sizeof( *force ) );

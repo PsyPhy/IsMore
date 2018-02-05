@@ -183,7 +183,6 @@ namespace MDFFileConverter {
 		}
 #pragma endregion
 	private: System::Void button1_Click(System::Object^  sender, System::EventArgs^  e) {
-				 MDFRecord mdf;
 				 Refresh();
 				 Enabled = false;
 				 if ( ::System::Windows::Forms::DialogResult::OK == openFileDialog1->ShowDialog() ) {
@@ -192,6 +191,7 @@ namespace MDFFileConverter {
 					 int files = openFileDialog1->FileNames->Length;
 					 for ( int i = 0; i < files; i++ ) {
 
+						MDFRecord mdf;
 						String^ input = openFileDialog1->FileNames[i];
 						logTextBox->AppendText( "\r\n  " + input );
 						char* mdf_filename = (char*) Marshal::StringToHGlobalAnsi( input ).ToPointer();
